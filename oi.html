@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Controle de Gastos Pro</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    * { box-sizing: border-box }
+
+    body {
+      margin:0;
+      font-family:'Inter', sans-serif;
+      background:#0a0a0a;
+      color:#fff;
+      display:flex;
+    }
+
+    :root {
+      --laranja:#cc5200;
+      --laranja2:#992f00;
+    }
+
+    .sidebar {
+      width:80px;
+      height:100vh;
+      background:linear-gradient(180deg,var(--laranja),var(--laranja2));
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      padding-top:20px;
+      position:fixed;
+      left:0;
+      top:0;
+      gap:20px;
+    }
+
+    .sidebar button {
+      width:50px;
+      height:50px;
+      border-radius:50%;
+      border:none;
+      background:rgba(255,255,255,0.2);
+      color:#fff;
+      font-size:18px;
+      cursor:pointer;
+      transition:0.3s;
+    }
+
+    .sidebar button:hover {
+      transform:scale(1.15);
+      background:#fff;
+      color:var(--laranja);
+    }
+
+    .container {
+      margin-left:100px;
+      max-width:900px;
+      padding:20px;
+      margin-right:auto;
+      margin-left:auto;
+    }
+
+    h1 { text-align:center }
+
+    .card {
+      background:#111;
+      padding:20px;
+      border-radius:20px;
+      margin-bottom:20px;
+      box-shadow:0 10px 30px rgba(0,0,0,0.5);
+      transform:translateY(20px);
+      opacity:0;
+      animation:fadeUp 0.6s forwards;
+    }
+
+    @keyframes fadeUp {
+      to { transform:translateY(0); opacity:1 }
+    }
+
+    input, select {
+      width:100%;
+      padding:12px;
+      margin:6px 0;
+      border-radius:12px;
+      border:none;
+      background:#1a1a1a;
+      color:#fff;
+    }
+
+    button.main {
+      width:100%;
+      padding:12px;
+      margin-top:8px;
+      border:none;
+      border-radius:14px;
+      font-weight:600;
+      cursor:pointer;
+      background:linear-gradient(135deg,var(--laranja),var(--laranja2));
+      color:#fff;
+      transition:0.3s;
+    }
+
+    button.main:hover {
+      transform:translateY(-2px);
+      box-shadow:0 8px 20px rgba(204,82,0,0.4);
+    }
+
+    table { width:100%; border-collapse:collapse }
+
+    th, td {
+      padding:10px;
+      text-align:center;
+      border-bottom:1px solid #222;
+    }
+
+    tr:hover { background:#1a1a1a }
+
+    canvas { margin-top:20px }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <button onclick="scrollToTop()">🏠</button>
+  <button onclick="exportarExcel()">⬇️</button>
+  <button onclick="enviarParaSheets()">☁️</button>
+</div>
+
+<div class="container">
+  <h1>💸 Controle de Gastos</h1>
+
+  <div class="card">
+    <input type="date" id="data">
+
+    <!-- Campo com máscara BRL -->
+    <input type="text" id="valor" placeholder="R$ 0,00" inputmode="numeric">
+
+    <select id="categoria">
+      <option>Alimentação</option>
+      <option>Transporte</option>
+      <option>Lazer</option>
+      <option>Contas</option>
+      <option>Outros</option>
+    </select>
+
+    <input type="text" id="descricao" placeholder="Descrição">
+
+    <button class="main" onclick="adicionarGasto()">Adicionar Gasto</button>
+  </div>
+
+  <div class="card">
+    <table id="tabela">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Valor</th>
+          <th>Categoria</th>
+          <th>Descrição</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>📊 Gastos por Categoria</h2>
+    <canvas id="grafico"></canvas>
+  </div>
+</div>
+
+<script>
+let gastos = JSON.parse(localStorage.getItem('gastos')) || [];
+let chart;
+
+const inputValor = document.getElementById('valor');
+
+// Máscara estilo Nubank
+inputValor.addEventListener('input', (e) => {
+  let valor = e.target.value.replace(/\D/g, '');
+
+  if (!valor) {
+    e.target.value = '';
+    return;
+  }
+
+  valor = (parseInt(valor) / 100).toFixed(2);
+
+  e.target.value = valor.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL'
+  });
+});
+
+function extrairNumero(valorFormatado) {
+  return parseFloat(valorFormatado.replace(/[^\d,]/g, '').replace(',', '.'));
+}
+
+function adicionarGasto() {
+  const data = document.getElementById('data').value;
+  const valorFormatado = document.getElementById('valor').value;
+  const valor = extrairNumero(valorFormatado);
+  const categoria = document.getElementById('categoria').value;
+  const descricao = document.getElementById('descricao').value;
+
+  if (!data || !valor) return alert('Preencha os campos');
+
+  if (valor < 0) {
+    alert('Valor não pode ser negativo');
+    return;
+  }
+
+  gastos.push({ data, valor, categoria, descricao });
+  localStorage.setItem('gastos', JSON.stringify(gastos));
+
+  atualizarTabela();
+  atualizarGrafico();
+
+  document.getElementById('valor').value = '';
+  document.getElementById('descricao').value = '';
+}
+
+function formatarReal(v) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function atualizarTabela() {
+  const tbody = document.querySelector('#tabela tbody');
+  tbody.innerHTML = '';
+
+  gastos.forEach(g => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${g.data}</td>
+        <td>${formatarReal(g.valor)}</td>
+        <td>${g.categoria}</td>
+        <td>${g.descricao}</td>
+      </tr>`;
+  });
+}
+
+function atualizarGrafico() {
+  const categorias = {};
+
+  gastos.forEach(g => {
+    categorias[g.categoria] = (categorias[g.categoria] || 0) + g.valor;
+  });
+
+  const labels = Object.keys(categorias);
+  const data = Object.values(categorias);
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById('grafico'), {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: data }]
+    }
+  });
+}
+
+function exportarExcel() {
+  const ws = XLSX.utils.json_to_sheet(gastos);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+  XLSX.writeFile(wb, 'gastos.xlsx');
+}
+
+function enviarParaSheets() {
+  fetch('SUA_URL_WEBAPP_AQUI', {
+    method: 'POST',
+    body: JSON.stringify(gastos),
+    headers: { 'Content-Type': 'application/json' }
+  })
+  .then(() => alert('Enviado!'))
+  .catch(() => alert('Erro'));
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+atualizarTabela();
+atualizarGrafico();
+</script>
+
+</body>
+</html>

@@ -272,7 +272,7 @@ function exportarExcel() {
 }
 
 function enviarParaSheets() {
-  fetch('SUA_URL_WEBAPP_AQUI', {
+  fetch('https://script.google.com/macros/s/AKfycbxGq89mlLh7HS3V_ZCXmaFVIih9rv0udmzGXqJthrySp9fg-fIZ_6lLQJi-lrLsF_jsUQ/exec', {
     method: 'POST',
     body: JSON.stringify(gastos),
     headers: { 'Content-Type': 'application/json' }
